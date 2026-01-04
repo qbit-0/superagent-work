@@ -232,9 +232,10 @@ const commands: Record<string, (args: string[]) => void> = {
   },
 
   show: (args) => {
-    const id = args[0];
+    const jsonFlag = args.includes("--json");
+    const id = args.find(a => !a.startsWith("--"));
     if (!id) {
-      console.error("Usage: work show <id>");
+      console.error("Usage: work show <id> [--json]");
       process.exit(1);
     }
 
@@ -248,6 +249,12 @@ const commands: Record<string, (args: string[]) => void> = {
     }
 
     const item = rowToWorkItem(row);
+    
+    if (jsonFlag) {
+      console.log(JSON.stringify(item));
+      return;
+    }
+    
     console.log(`ID:       ${item.id}`);
     console.log(`Title:    ${item.title}`);
     console.log(`Status:   ${item.status}`);
