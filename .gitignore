@@ -1,0 +1,10 @@
+# OS
+.DS_Store
+
+# Editor
+*.swp
+*.swo
+*~
+
+# Node (if we add CLI later)
+node_modules/

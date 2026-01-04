@@ -1,0 +1,11 @@
+{
+  "name": "superagent-issues",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "si": "./cli.ts"
+  },
+  "scripts": {
+    "cli": "bun run cli.ts"
+  }
+}
