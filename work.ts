@@ -24,6 +24,7 @@ interface WorkItem {
   labels?: string[];
   closed_reason?: string;
   log?: LogEntry[];
+  assignee?: string;
 }
 
 // Find .work directory by walking up from cwd
@@ -67,7 +68,8 @@ function getDb(): Database {
       blocked_by TEXT,
       labels TEXT,
       closed_reason TEXT,
-      log TEXT
+      log TEXT,
+      assignee TEXT
     )
   `);
   
@@ -88,6 +90,7 @@ function rowToWorkItem(row: any): WorkItem {
     labels: row.labels ? JSON.parse(row.labels) : undefined,
     closed_reason: row.closed_reason || undefined,
     log: row.log ? JSON.parse(row.log) : undefined,
+    assignee: row.assignee || undefined,
   };
 }
 
@@ -240,6 +243,7 @@ const commands: Record<string, (args: string[]) => void> = {
     if (item.description) console.log(`\n${item.description}`);
     if (item.blocked_by?.length) console.log(`Blocked by: ${item.blocked_by.join(", ")}`);
     if (item.labels?.length) console.log(`Labels: ${item.labels.join(", ")}`);
+    if (item.assignee) console.log(`Assignee: ${item.assignee}`);
     if (item.closed_reason) console.log(`Closed: ${item.closed_reason}`);
     if (item.log?.length) {
       console.log(`\nLog:`);
@@ -548,8 +552,8 @@ const commands: Record<string, (args: string[]) => void> = {
     db.run("DELETE FROM work");
     
     const stmt = db.prepare(`
-      INSERT INTO work (id, title, status, priority, type, created, updated, description, blocked_by, labels, closed_reason, log)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO work (id, title, status, priority, type, created, updated, description, blocked_by, labels, closed_reason, log, assignee)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     for (const item of items) {
@@ -565,7 +569,8 @@ const commands: Record<string, (args: string[]) => void> = {
         item.blocked_by ? JSON.stringify(item.blocked_by) : null,
         item.labels ? JSON.stringify(item.labels) : null,
         item.closed_reason || null,
-        item.log ? JSON.stringify(item.log) : null
+        item.log ? JSON.stringify(item.log) : null,
+        item.assignee || null
       );
     }
     
@@ -578,6 +583,72 @@ const commands: Record<string, (args: string[]) => void> = {
     exportToJsonl(db);
     db.close();
     console.log("Exported work items to JSONL");
+  },
+
+  claim: (args) => {
+    const id = args[0];
+    const assignee = args[1];
+    
+    if (!id || !assignee) {
+      console.error("Usage: work claim <id> <assignee>");
+      process.exit(1);
+    }
+
+    const db = getDb();
+    const row = db.query("SELECT * FROM work WHERE id = ?").get(padId(id)) as any;
+    if (!row) {
+      db.close();
+      console.error(`Work item ${id} not found`);
+      process.exit(1);
+    }
+
+    db.run("UPDATE work SET assignee = ?, updated = ? WHERE id = ?", [assignee, now(), padId(id)]);
+    exportToJsonl(db);
+    db.close();
+    console.log(`${padId(id)} claimed by ${assignee}`);
+  },
+
+  unclaim: (args) => {
+    const id = args[0];
+    
+    if (!id) {
+      console.error("Usage: work unclaim <id>");
+      process.exit(1);
+    }
+
+    const db = getDb();
+    const row = db.query("SELECT * FROM work WHERE id = ?").get(padId(id)) as any;
+    if (!row) {
+      db.close();
+      console.error(`Work item ${id} not found`);
+      process.exit(1);
+    }
+
+    db.run("UPDATE work SET assignee = NULL, updated = ? WHERE id = ?", [now(), padId(id)]);
+    exportToJsonl(db);
+    db.close();
+    console.log(`${padId(id)} unclaimed`);
+  },
+
+  mine: (args) => {
+    const assignee = args[0];
+    
+    if (!assignee) {
+      console.error("Usage: work mine <assignee>");
+      process.exit(1);
+    }
+
+    const db = getDb();
+    const rows = db.query("SELECT * FROM work WHERE assignee = ? AND status != 'closed' ORDER BY priority, CAST(id AS INTEGER)").all(assignee);
+    db.close();
+    
+    if (rows.length === 0) {
+      console.log(`No work items assigned to ${assignee}`);
+      return;
+    }
+
+    console.log(`Work assigned to ${assignee}:`);
+    rows.map(rowToWorkItem).forEach((i) => console.log(formatWork(i)));
   },
 
   help: () => {
@@ -597,6 +668,9 @@ Commands:
   unblock <id> <blocker-id> Remove blocker from id
   ready             List items ready to work on (no open blockers)
   blocked           List items that are blocked
+  claim <id> <name> Assign work item to someone
+  unclaim <id>      Remove assignment
+  mine <name>       List work assigned to someone
   import            Import from JSONL to DB (after git pull)
   export            Export DB to JSONL (before git commit)
   help              Show this help
