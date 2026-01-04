@@ -1,19 +1,20 @@
 {
-  "name": "superagent-work",
-  "version": "0.1.0",
-  "type": "module",
-  "bin": {
-    "work": "./work.ts"
-  },
-  "scripts": {
-    "cli": "bun run work.ts",
-    "typecheck": "tsc --noEmit",
-    "lint": "biome check .",
-    "format": "biome format --write .",
-    "check": "bun run typecheck && bun run lint"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "^1.9.0",
-    "typescript": "^5.0.0"
-  }
+	"name": "superagent-work",
+	"version": "0.1.0",
+	"type": "module",
+	"bin": {
+		"work": "./work.ts"
+	},
+	"scripts": {
+		"cli": "bun run work.ts",
+		"typecheck": "tsc --noEmit",
+		"lint": "biome check .",
+		"format": "biome format --write .",
+		"check": "bun run typecheck && bun run lint"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^1.9.0",
+		"@types/bun": "^1.3.5",
+		"typescript": "^5.0.0"
+	}
 }

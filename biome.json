@@ -1,28 +1,36 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.0/schema.json",
-  "organizeImports": {
-    "enabled": true
-  },
-  "linter": {
-    "enabled": true,
-    "rules": {
-      "recommended": true,
-      "suspicious": {
-        "noExplicitAny": "off"
-      },
-      "complexity": {
-        "noForEach": "off"
-      },
-      "style": {
-        "useNodejsImportProtocol": "off",
-        "noUnusedTemplateLiteral": "off",
-        "useTemplate": "off"
-      }
-    }
-  },
-  "formatter": {
-    "enabled": true,
-    "indentStyle": "space",
-    "indentWidth": 2
-  }
+	"$schema": "https://biomejs.dev/schemas/1.9.0/schema.json",
+	"organizeImports": {
+		"enabled": true
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"recommended": true,
+			"correctness": {
+				"noUndeclaredVariables": "off",
+				"noNodejsModules": "off"
+			},
+			"style": {
+				"noDefaultExport": "off",
+				"useNodejsImportProtocol": "off",
+				"noUnusedTemplateLiteral": "off",
+				"useBlockStatements": "off",
+				"useExplicitLengthCheck": "off",
+				"useTemplate": "off"
+			},
+			"suspicious": {
+				"noExplicitAny": "off"
+			},
+			"complexity": {
+				"noForEach": "off"
+			}
+		}
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab",
+		"indentWidth": 2,
+		"lineWidth": 100
+	}
 }
