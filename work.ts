@@ -18,30 +18,30 @@ interface Issue {
   closed_reason?: string;
 }
 
-// Find .issues directory by walking up from cwd
-function findIssuesDir(): string | null {
+// Find .work directory by walking up from cwd
+function findWorkDir(): string | null {
   let dir = process.cwd();
   while (dir !== "/") {
-    const issuesPath = join(dir, ".issues");
-    if (existsSync(issuesPath)) {
-      return issuesPath;
+    const workPath = join(dir, ".work");
+    if (existsSync(workPath)) {
+      return workPath;
     }
     dir = resolve(dir, "..");
   }
   return null;
 }
 
-function getIssuesPath(): string {
-  const issuesDir = findIssuesDir();
-  if (!issuesDir) {
-    console.error("Error: No .issues directory found. Run 'work init' first.");
+function getWorkPath(): string {
+  const workDir = findWorkDir();
+  if (!workDir) {
+    console.error("Error: No .work directory found. Run 'work init' first.");
     process.exit(1);
   }
-  return join(issuesDir, "issues.jsonl");
+  return join(workDir, "work.jsonl");
 }
 
 function readIssues(): Issue[] {
-  const path = getIssuesPath();
+  const path = getWorkPath();
   if (!existsSync(path)) return [];
   const content = readFileSync(path, "utf-8").trim();
   if (!content) return [];
@@ -49,7 +49,7 @@ function readIssues(): Issue[] {
 }
 
 function writeIssues(issues: Issue[]): void {
-  const path = getIssuesPath();
+  const path = getWorkPath();
   const content = issues.map((i) => JSON.stringify(i)).join("\n");
   writeFileSync(path, content ? content + "\n" : "");
 }
@@ -79,14 +79,14 @@ function formatIssue(issue: Issue, verbose = false): string {
 // Commands
 const commands: Record<string, (args: string[]) => void> = {
   init: () => {
-    const issuesDir = join(process.cwd(), ".issues");
-    if (existsSync(issuesDir)) {
-      console.log(".issues directory already exists");
+    const workDir = join(process.cwd(), ".work");
+    if (existsSync(workDir)) {
+      console.log(".work directory already exists");
       return;
     }
-    mkdirSync(issuesDir, { recursive: true });
-    writeFileSync(join(issuesDir, "issues.jsonl"), "");
-    console.log("Initialized .issues directory");
+    mkdirSync(workDir, { recursive: true });
+    writeFileSync(join(workDir, "work.jsonl"), "");
+    console.log("Initialized .work directory");
   },
 
   add: (args) => {
