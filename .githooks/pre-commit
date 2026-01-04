@@ -1,0 +1,18 @@
+#!/bin/bash
+set -e
+
+echo "Running pre-commit checks..."
+
+echo "→ Formatting..."
+bun run format
+
+echo "→ Linting..."
+bun run lint
+
+echo "→ Typechecking..."
+bun run typecheck
+
+echo "→ Running tests..."
+bun test
+
+echo "✓ All checks passed!"
