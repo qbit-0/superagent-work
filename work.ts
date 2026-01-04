@@ -4,7 +4,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { join, resolve } from "path";
 
 // Types
-interface Issue {
+interface WorkItem {
   id: string;
   title: string;
   status: "open" | "in_progress" | "closed";
@@ -40,7 +40,7 @@ function getWorkPath(): string {
   return join(workDir, "work.jsonl");
 }
 
-function readIssues(): Issue[] {
+function readWork(): WorkItem[] {
   const path = getWorkPath();
   if (!existsSync(path)) return [];
   const content = readFileSync(path, "utf-8").trim();
@@ -48,15 +48,15 @@ function readIssues(): Issue[] {
   return content.split("\n").map((line) => JSON.parse(line));
 }
 
-function writeIssues(issues: Issue[]): void {
+function writeWork(items: WorkItem[]): void {
   const path = getWorkPath();
-  const content = issues.map((i) => JSON.stringify(i)).join("\n");
+  const content = items.map((i) => JSON.stringify(i)).join("\n");
   writeFileSync(path, content ? content + "\n" : "");
 }
 
-function nextId(issues: Issue[]): string {
-  if (issues.length === 0) return "001";
-  const maxId = Math.max(...issues.map((i) => parseInt(i.id, 10)));
+function nextId(items: WorkItem[]): string {
+  if (items.length === 0) return "001";
+  const maxId = Math.max(...items.map((i) => parseInt(i.id, 10)));
   return String(maxId + 1).padStart(3, "0");
 }
 
@@ -64,14 +64,14 @@ function now(): string {
   return new Date().toISOString();
 }
 
-function formatIssue(issue: Issue, verbose = false): string {
+function formatWork(item: WorkItem, verbose = false): string {
   const statusIcon =
-    issue.status === "closed" ? "✓" : issue.status === "in_progress" ? "▶" : "○";
-  const priorityStr = `P${issue.priority}`;
-  const line = `${statusIcon} ${issue.id} [${priorityStr}] ${issue.title}`;
+    item.status === "closed" ? "✓" : item.status === "in_progress" ? "▶" : "○";
+  const priorityStr = `P${item.priority}`;
+  const line = `${statusIcon} ${item.id} [${priorityStr}] ${item.title}`;
   
-  if (verbose && issue.description) {
-    return `${line}\n   ${issue.description}`;
+  if (verbose && item.description) {
+    return `${line}\n   ${item.description}`;
   }
   return line;
 }
@@ -90,47 +90,51 @@ const commands: Record<string, (args: string[]) => void> = {
   },
 
   add: (args) => {
-    const title = args.join(" ");
+    const typeFlag = args.find((a) => a.startsWith("--type="))?.split("=")[1];
+    const priorityFlag = args.find((a) => a.startsWith("--priority="))?.split("=")[1];
+    const titleParts = args.filter((a) => !a.startsWith("--"));
+    const title = titleParts.join(" ");
+    
     if (!title) {
-      console.error("Usage: work add <title>");
+      console.error("Usage: work add <title> [--type=task|bug|feature] [--priority=0-4]");
       process.exit(1);
     }
 
-    const issues = readIssues();
-    const issue: Issue = {
-      id: nextId(issues),
+    const items = readWork();
+    const item: WorkItem = {
+      id: nextId(items),
       title,
       status: "open",
-      priority: 2,
-      type: "task",
+      priority: priorityFlag ? parseInt(priorityFlag) : 2,
+      type: typeFlag || "task",
       created: now(),
       updated: now(),
     };
-    issues.push(issue);
-    writeIssues(issues);
-    console.log(`Created issue ${issue.id}: ${issue.title}`);
+    items.push(item);
+    writeWork(items);
+    console.log(`Created ${item.id}: ${item.title}`);
   },
 
   list: (args) => {
-    const issues = readIssues();
+    const items = readWork();
     const statusFilter = args.find((a) => a.startsWith("--status="))?.split("=")[1];
     
-    let filtered = issues;
+    let filtered = items;
     if (statusFilter) {
-      filtered = issues.filter((i) => i.status === statusFilter);
+      filtered = items.filter((i) => i.status === statusFilter);
     } else {
       // Default: show non-closed
-      filtered = issues.filter((i) => i.status !== "closed");
+      filtered = items.filter((i) => i.status !== "closed");
     }
 
     if (filtered.length === 0) {
-      console.log("No issues found");
+      console.log("No work items found");
       return;
     }
 
     // Sort by priority, then by id
     filtered.sort((a, b) => a.priority - b.priority || a.id.localeCompare(b.id));
-    filtered.forEach((i) => console.log(formatIssue(i)));
+    filtered.forEach((i) => console.log(formatWork(i)));
   },
 
   show: (args) => {
@@ -140,24 +144,24 @@ const commands: Record<string, (args: string[]) => void> = {
       process.exit(1);
     }
 
-    const issues = readIssues();
-    const issue = issues.find((i) => i.id === id.padStart(3, "0"));
-    if (!issue) {
-      console.error(`Issue ${id} not found`);
+    const items = readWork();
+    const item = items.find((i) => i.id === id.padStart(3, "0"));
+    if (!item) {
+      console.error(`Work item ${id} not found`);
       process.exit(1);
     }
 
-    console.log(`ID:       ${issue.id}`);
-    console.log(`Title:    ${issue.title}`);
-    console.log(`Status:   ${issue.status}`);
-    console.log(`Priority: P${issue.priority}`);
-    console.log(`Type:     ${issue.type}`);
-    console.log(`Created:  ${issue.created}`);
-    console.log(`Updated:  ${issue.updated}`);
-    if (issue.description) console.log(`\n${issue.description}`);
-    if (issue.blocked_by?.length) console.log(`Blocked by: ${issue.blocked_by.join(", ")}`);
-    if (issue.labels?.length) console.log(`Labels: ${issue.labels.join(", ")}`);
-    if (issue.closed_reason) console.log(`Closed: ${issue.closed_reason}`);
+    console.log(`ID:       ${item.id}`);
+    console.log(`Title:    ${item.title}`);
+    console.log(`Status:   ${item.status}`);
+    console.log(`Priority: P${item.priority}`);
+    console.log(`Type:     ${item.type}`);
+    console.log(`Created:  ${item.created}`);
+    console.log(`Updated:  ${item.updated}`);
+    if (item.description) console.log(`\n${item.description}`);
+    if (item.blocked_by?.length) console.log(`Blocked by: ${item.blocked_by.join(", ")}`);
+    if (item.labels?.length) console.log(`Labels: ${item.labels.join(", ")}`);
+    if (item.closed_reason) console.log(`Closed: ${item.closed_reason}`);
   },
 
   start: (args) => {
@@ -167,17 +171,17 @@ const commands: Record<string, (args: string[]) => void> = {
       process.exit(1);
     }
 
-    const issues = readIssues();
-    const issue = issues.find((i) => i.id === id.padStart(3, "0"));
-    if (!issue) {
-      console.error(`Issue ${id} not found`);
+    const items = readWork();
+    const item = items.find((i) => i.id === id.padStart(3, "0"));
+    if (!item) {
+      console.error(`Work item ${id} not found`);
       process.exit(1);
     }
 
-    issue.status = "in_progress";
-    issue.updated = now();
-    writeIssues(issues);
-    console.log(`Started issue ${issue.id}: ${issue.title}`);
+    item.status = "in_progress";
+    item.updated = now();
+    writeWork(items);
+    console.log(`Started ${item.id}: ${item.title}`);
   },
 
   close: (args) => {
@@ -187,20 +191,20 @@ const commands: Record<string, (args: string[]) => void> = {
       process.exit(1);
     }
 
-    const issues = readIssues();
-    const issue = issues.find((i) => i.id === id.padStart(3, "0"));
-    if (!issue) {
-      console.error(`Issue ${id} not found`);
+    const items = readWork();
+    const item = items.find((i) => i.id === id.padStart(3, "0"));
+    if (!item) {
+      console.error(`Work item ${id} not found`);
       process.exit(1);
     }
 
-    issue.status = "closed";
-    issue.updated = now();
+    item.status = "closed";
+    item.updated = now();
     if (args.length > 1) {
-      issue.closed_reason = args.slice(1).join(" ");
+      item.closed_reason = args.slice(1).join(" ");
     }
-    writeIssues(issues);
-    console.log(`Closed issue ${issue.id}: ${issue.title}`);
+    writeWork(items);
+    console.log(`Closed ${item.id}: ${item.title}`);
   },
 
   reopen: (args) => {
@@ -210,18 +214,18 @@ const commands: Record<string, (args: string[]) => void> = {
       process.exit(1);
     }
 
-    const issues = readIssues();
-    const issue = issues.find((i) => i.id === id.padStart(3, "0"));
-    if (!issue) {
-      console.error(`Issue ${id} not found`);
+    const items = readWork();
+    const item = items.find((i) => i.id === id.padStart(3, "0"));
+    if (!item) {
+      console.error(`Work item ${id} not found`);
       process.exit(1);
     }
 
-    issue.status = "open";
-    issue.updated = now();
-    delete issue.closed_reason;
-    writeIssues(issues);
-    console.log(`Reopened issue ${issue.id}: ${issue.title}`);
+    item.status = "open";
+    item.updated = now();
+    delete item.closed_reason;
+    writeWork(items);
+    console.log(`Reopened ${item.id}: ${item.title}`);
   },
 
   edit: (args) => {
@@ -235,41 +239,41 @@ const commands: Record<string, (args: string[]) => void> = {
       process.exit(1);
     }
 
-    const issues = readIssues();
-    const issue = issues.find((i) => i.id === id.padStart(3, "0"));
-    if (!issue) {
-      console.error(`Issue ${id} not found`);
+    const items = readWork();
+    const item = items.find((i) => i.id === id.padStart(3, "0"));
+    if (!item) {
+      console.error(`Work item ${id} not found`);
       process.exit(1);
     }
 
     switch (field) {
       case "title":
-        issue.title = value;
+        item.title = value;
         break;
       case "priority":
-        issue.priority = parseInt(value, 10);
+        item.priority = parseInt(value, 10);
         break;
       case "type":
-        issue.type = value as Issue["type"];
+        item.type = value as WorkItem["type"];
         break;
       case "description":
-        issue.description = value;
+        item.description = value;
         break;
       default:
         console.error(`Unknown field: ${field}`);
         process.exit(1);
     }
 
-    issue.updated = now();
-    writeIssues(issues);
-    console.log(`Updated issue ${issue.id}`);
+    item.updated = now();
+    writeWork(items);
+    console.log(`Updated ${item.id}`);
   },
 
   help: () => {
     console.log(`superagent-work - Minimal work tracker
 
 Commands:
-  init              Initialize .issues in current directory
+  init              Initialize .work in current directory
   add <title>       Create a new work item
   list [--status=X] List work items (default: non-closed)
   show <id>         Show work item details

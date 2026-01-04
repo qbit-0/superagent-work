@@ -5,8 +5,8 @@ A minimal, project-local work tracker. One JSONL file, no daemon, no magic.
 ## Structure
 
 ```
-.issues/
-  issues.jsonl    # All work items, one JSON object per line
+.work/
+  work.jsonl    # All work items, one JSON object per line
 ```
 
 ## Issue Schema
