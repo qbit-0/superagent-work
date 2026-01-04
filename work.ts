@@ -154,7 +154,8 @@ const commands: Record<string, (args: string[]) => void> = {
         blocked_by TEXT,
         labels TEXT,
         closed_reason TEXT,
-        log TEXT
+        log TEXT,
+        assignee TEXT
       )
     `);
 		db.close();
