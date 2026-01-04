@@ -354,6 +354,145 @@ const commands: Record<string, (args: string[]) => void> = {
     console.log(`Logged to ${padId(id)}`);
   },
 
+  block: (args) => {
+    const id = args[0];
+    const blockerId = args[1];
+    
+    if (!id || !blockerId) {
+      console.error("Usage: work block <id> <blocker-id>");
+      console.error("  Marks <id> as blocked by <blocker-id>");
+      process.exit(1);
+    }
+
+    const db = getDb();
+    const row = db.query("SELECT * FROM work WHERE id = ?").get(padId(id)) as any;
+    if (!row) {
+      db.close();
+      console.error(`Work item ${id} not found`);
+      process.exit(1);
+    }
+    
+    const blockerRow = db.query("SELECT * FROM work WHERE id = ?").get(padId(blockerId)) as any;
+    if (!blockerRow) {
+      db.close();
+      console.error(`Blocker work item ${blockerId} not found`);
+      process.exit(1);
+    }
+
+    const blockedBy: string[] = row.blocked_by ? JSON.parse(row.blocked_by) : [];
+    const paddedBlockerId = padId(blockerId);
+    
+    if (blockedBy.includes(paddedBlockerId)) {
+      db.close();
+      console.log(`${padId(id)} is already blocked by ${paddedBlockerId}`);
+      return;
+    }
+    
+    blockedBy.push(paddedBlockerId);
+    db.run("UPDATE work SET blocked_by = ?, updated = ? WHERE id = ?", 
+      [JSON.stringify(blockedBy), now(), padId(id)]);
+    exportToJsonl(db);
+    db.close();
+    console.log(`${padId(id)} is now blocked by ${paddedBlockerId}`);
+  },
+
+  unblock: (args) => {
+    const id = args[0];
+    const blockerId = args[1];
+    
+    if (!id || !blockerId) {
+      console.error("Usage: work unblock <id> <blocker-id>");
+      console.error("  Removes <blocker-id> from blockers of <id>");
+      process.exit(1);
+    }
+
+    const db = getDb();
+    const row = db.query("SELECT * FROM work WHERE id = ?").get(padId(id)) as any;
+    if (!row) {
+      db.close();
+      console.error(`Work item ${id} not found`);
+      process.exit(1);
+    }
+
+    const blockedBy: string[] = row.blocked_by ? JSON.parse(row.blocked_by) : [];
+    const paddedBlockerId = padId(blockerId);
+    const idx = blockedBy.indexOf(paddedBlockerId);
+    
+    if (idx === -1) {
+      db.close();
+      console.log(`${padId(id)} is not blocked by ${paddedBlockerId}`);
+      return;
+    }
+    
+    blockedBy.splice(idx, 1);
+    db.run("UPDATE work SET blocked_by = ?, updated = ? WHERE id = ?", 
+      [blockedBy.length ? JSON.stringify(blockedBy) : null, now(), padId(id)]);
+    exportToJsonl(db);
+    db.close();
+    console.log(`Removed ${paddedBlockerId} from blockers of ${padId(id)}`);
+  },
+
+  ready: (args) => {
+    const db = getDb();
+    
+    // Get all non-closed items
+    const rows = db.query("SELECT * FROM work WHERE status != 'closed' ORDER BY priority, CAST(id AS INTEGER)").all();
+    
+    // Get all closed item IDs for checking blockers
+    const closedIds = new Set(
+      (db.query("SELECT id FROM work WHERE status = 'closed'").all() as any[]).map(r => r.id)
+    );
+    
+    db.close();
+    
+    // Filter to items with no open blockers
+    const readyItems = rows.map(rowToWorkItem).filter(item => {
+      if (!item.blocked_by?.length) return true;
+      // Ready if all blockers are closed
+      return item.blocked_by.every(blockerId => closedIds.has(blockerId));
+    });
+    
+    if (readyItems.length === 0) {
+      console.log("No ready work items");
+      return;
+    }
+
+    console.log("Ready to work on:");
+    readyItems.forEach((i) => console.log(formatWork(i)));
+  },
+
+  blocked: (args) => {
+    const db = getDb();
+    
+    // Get all non-closed items with blockers
+    const rows = db.query("SELECT * FROM work WHERE status != 'closed' AND blocked_by IS NOT NULL ORDER BY priority, CAST(id AS INTEGER)").all();
+    
+    // Get all closed item IDs
+    const closedIds = new Set(
+      (db.query("SELECT id FROM work WHERE status = 'closed'").all() as any[]).map(r => r.id)
+    );
+    
+    db.close();
+    
+    // Filter to items with at least one open blocker
+    const blockedItems = rows.map(rowToWorkItem).filter(item => {
+      if (!item.blocked_by?.length) return false;
+      // Blocked if any blocker is still open
+      return item.blocked_by.some(blockerId => !closedIds.has(blockerId));
+    });
+    
+    if (blockedItems.length === 0) {
+      console.log("No blocked work items");
+      return;
+    }
+
+    console.log("Blocked items:");
+    blockedItems.forEach((item) => {
+      const openBlockers = item.blocked_by!.filter(id => !closedIds.has(id));
+      console.log(`${formatWork(item)} [blocked by: ${openBlockers.join(", ")}]`);
+    });
+  },
+
   edit: (args) => {
     const id = args[0];
     const field = args[1];
@@ -454,6 +593,10 @@ Commands:
   reopen <id>       Reopen a closed work item
   edit <id> <field> <value>  Edit work item field
   log <id> <message>  Add a log entry
+  block <id> <blocker-id>   Mark id as blocked by blocker-id
+  unblock <id> <blocker-id> Remove blocker from id
+  ready             List items ready to work on (no open blockers)
+  blocked           List items that are blocked
   import            Import from JSONL to DB (after git pull)
   export            Export DB to JSONL (before git commit)
   help              Show this help
