@@ -16,7 +16,7 @@ interface WorkItem {
   title: string;
   status: "open" | "in_progress" | "closed";
   priority: number;
-  type: "task" | "bug" | "feature";
+  type: "task" | "bug" | "feature" | "message";
   created: string;
   updated: string;
   description?: string;
@@ -25,6 +25,7 @@ interface WorkItem {
   closed_reason?: string;
   log?: LogEntry[];
   assignee?: string;
+  author?: string;
 }
 
 // Find .work directory by walking up from cwd
@@ -69,9 +70,17 @@ function getDb(): Database {
       labels TEXT,
       closed_reason TEXT,
       log TEXT,
-      assignee TEXT
+      assignee TEXT,
+      author TEXT
     )
   `);
+  
+  // Migration: add author column if missing
+  try {
+    db.run(`ALTER TABLE work ADD COLUMN author TEXT`);
+  } catch (e) {
+    // Column already exists
+  }
 
   return db;
 }
@@ -91,6 +100,7 @@ function rowToWorkItem(row: any): WorkItem {
     closed_reason: row.closed_reason || undefined,
     log: row.log ? JSON.parse(row.log) : undefined,
     assignee: row.assignee || undefined,
+    author: row.author || undefined,
   };
 }
 
@@ -160,7 +170,8 @@ const commands: Record<string, (args: string[]) => void> = {
         labels TEXT,
         closed_reason TEXT,
         log TEXT,
-        assignee TEXT
+        assignee TEXT,
+        author TEXT
       )
     `);
     db.close();
@@ -175,12 +186,14 @@ const commands: Record<string, (args: string[]) => void> = {
     const priorityFlag = args
       .find((a) => a.startsWith("--priority="))
       ?.split("=")[1];
+    const fromFlag = args.find((a) => a.startsWith("--from="))?.split("=")[1];
+    const toFlag = args.find((a) => a.startsWith("--to="))?.split("=")[1];
     const titleParts = args.filter((a) => !a.startsWith("--"));
     const title = titleParts.join(" ");
 
     if (!title) {
       console.error(
-        "Usage: work add <title> [--type=task|bug|feature] [--priority=0-4]",
+        "Usage: work add <title> [--type=task|bug|feature|message] [--priority=0-4] [--from=author] [--to=assignee]",
       );
       process.exit(1);
     }
@@ -190,7 +203,7 @@ const commands: Record<string, (args: string[]) => void> = {
     const timestamp = now();
 
     db.run(
-      `INSERT INTO work (id, title, status, priority, type, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO work (id, title, status, priority, type, created, updated, author, assignee) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         title,
@@ -199,6 +212,8 @@ const commands: Record<string, (args: string[]) => void> = {
         typeFlag || "task",
         timestamp,
         timestamp,
+        fromFlag || null,
+        toFlag || null,
       ],
     );
 
@@ -215,6 +230,15 @@ const commands: Record<string, (args: string[]) => void> = {
     const labelFilter = args
       .find((a) => a.startsWith("--label="))
       ?.split("=")[1];
+    const typeFilter = args
+      .find((a) => a.startsWith("--type="))
+      ?.split("=")[1];
+    const fromFilter = args
+      .find((a) => a.startsWith("--from="))
+      ?.split("=")[1];
+    const toFilter = args
+      .find((a) => a.startsWith("--to="))
+      ?.split("=")[1];
 
     let query = "SELECT * FROM work";
     const conditions: string[] = [];
@@ -225,6 +249,21 @@ const commands: Record<string, (args: string[]) => void> = {
       params.push(statusFilter);
     } else {
       conditions.push("status != 'closed'");
+    }
+
+    if (typeFilter) {
+      conditions.push("type = ?");
+      params.push(typeFilter);
+    }
+
+    if (fromFilter) {
+      conditions.push("author = ?");
+      params.push(fromFilter);
+    }
+
+    if (toFilter) {
+      conditions.push("assignee = ?");
+      params.push(toFilter);
     }
 
     if (conditions.length) {
@@ -285,11 +324,12 @@ const commands: Record<string, (args: string[]) => void> = {
     console.log(`Type:     ${item.type}`);
     console.log(`Created:  ${item.created}`);
     console.log(`Updated:  ${item.updated}`);
+    if (item.author) console.log(`Author:   ${item.author}`);
+    if (item.assignee) console.log(`Assignee: ${item.assignee}`);
     if (item.description) console.log(`\n${item.description}`);
     if (item.blocked_by?.length)
       console.log(`Blocked by: ${item.blocked_by.join(", ")}`);
     if (item.labels?.length) console.log(`Labels: ${item.labels.join(", ")}`);
-    if (item.assignee) console.log(`Assignee: ${item.assignee}`);
     if (item.closed_reason) console.log(`Closed: ${item.closed_reason}`);
     if (item.log?.length) {
       console.log(`\nLog:`);
@@ -614,7 +654,7 @@ const commands: Record<string, (args: string[]) => void> = {
       process.exit(1);
     }
 
-    const validFields = ["title", "priority", "type", "description"];
+    const validFields = ["title", "priority", "type", "description", "author", "assignee"];
     if (!validFields.includes(field)) {
       db.close();
       console.error(`Unknown field: ${field}`);
@@ -876,12 +916,17 @@ const commands: Record<string, (args: string[]) => void> = {
 Commands:
   init              Initialize .work in current directory
   add <title>       Create a new work item
-  list [--status=X] [--label=X] List work items (default: non-closed)
+                    [--type=task|bug|feature|message] [--priority=0-4]
+                    [--from=author] [--to=assignee]
+  list              List work items (default: non-closed)
+                    [--status=X] [--label=X] [--type=X]
+                    [--from=author] [--to=assignee]
   show <id>         Show work item details
   start <id>        Mark work item as in_progress
   close <id> [why]  Close a work item
   reopen <id>       Reopen a closed work item
   edit <id> <field> <value>  Edit work item field
+                    Fields: title, priority, type, description, author, assignee
   log <id> <message>  Add a log entry
   block <id> <blocker-id>   Mark id as blocked by blocker-id
   unblock <id> <blocker-id> Remove blocker from id
@@ -899,7 +944,7 @@ Commands:
 
 Status: open, in_progress, closed
 Priority: 0 (critical) to 4 (backlog), default 2
-Type: task, bug, feature
+Type: task, bug, feature, message
 
 Storage: SQLite (.work/work.db) with auto-export to JSONL (.work/work.jsonl)`);
   },
