@@ -28,6 +28,37 @@ interface WorkItem {
   author?: string;
 }
 
+// Database row type (before JSON parsing)
+interface WorkRow {
+  id: string;
+  title: string;
+  status: string;
+  priority: number;
+  type: string;
+  created: string;
+  updated: string;
+  description: string | null;
+  blocked_by: string | null;
+  labels: string | null;
+  closed_reason: string | null;
+  log: string | null;
+  assignee: string | null;
+  author: string | null;
+}
+
+// For queries that return only specific columns
+interface IdRow {
+  id: string;
+}
+
+interface MaxIdRow {
+  maxId: number | null;
+}
+
+interface LabelsRow {
+  labels: string;
+}
+
 // Find .work directory by walking up from cwd
 function findWorkDir(): string | null {
   let dir = process.cwd();
@@ -74,7 +105,7 @@ function getDb(): Database {
       author TEXT
     )
   `);
-  
+
   // Migration: add author column if missing
   try {
     db.run(`ALTER TABLE work ADD COLUMN author TEXT`);
@@ -85,13 +116,13 @@ function getDb(): Database {
   return db;
 }
 
-function rowToWorkItem(row: any): WorkItem {
+function rowToWorkItem(row: WorkRow): WorkItem {
   return {
     id: row.id,
     title: row.title,
-    status: row.status,
+    status: row.status as WorkItem["status"],
     priority: row.priority,
-    type: row.type,
+    type: row.type as WorkItem["type"],
     created: row.created,
     updated: row.updated,
     description: row.description || undefined,
@@ -110,7 +141,7 @@ function exportToJsonl(db: Database): void {
 
   const rows = db
     .query("SELECT * FROM work ORDER BY CAST(id AS INTEGER)")
-    .all();
+    .all() as WorkRow[];
   const items = rows.map(rowToWorkItem);
   const content = items.map((i) => JSON.stringify(i)).join("\n");
   writeFileSync(jsonlPath, content ? content + "\n" : "");
@@ -119,7 +150,7 @@ function exportToJsonl(db: Database): void {
 function nextId(db: Database): string {
   const row = db
     .query("SELECT MAX(CAST(id AS INTEGER)) as maxId FROM work")
-    .get() as any;
+    .get() as MaxIdRow | null;
   const maxId = row?.maxId || 0;
   return String(maxId + 1).padStart(3, "0");
 }
@@ -230,15 +261,9 @@ const commands: Record<string, (args: string[]) => void> = {
     const labelFilter = args
       .find((a) => a.startsWith("--label="))
       ?.split("=")[1];
-    const typeFilter = args
-      .find((a) => a.startsWith("--type="))
-      ?.split("=")[1];
-    const fromFilter = args
-      .find((a) => a.startsWith("--from="))
-      ?.split("=")[1];
-    const toFilter = args
-      .find((a) => a.startsWith("--to="))
-      ?.split("=")[1];
+    const typeFilter = args.find((a) => a.startsWith("--type="))?.split("=")[1];
+    const fromFilter = args.find((a) => a.startsWith("--from="))?.split("=")[1];
+    const toFilter = args.find((a) => a.startsWith("--to="))?.split("=")[1];
 
     let query = "SELECT * FROM work";
     const conditions: string[] = [];
@@ -276,9 +301,10 @@ const commands: Record<string, (args: string[]) => void> = {
 
     // Filter by label in JS (JSON field)
     if (labelFilter) {
-      rows = rows.filter((row: any) => {
-        if (!row.labels) return false;
-        const labels: string[] = JSON.parse(row.labels);
+      rows = rows.filter((row) => {
+        const workRow = row as WorkRow;
+        if (!workRow.labels) return false;
+        const labels: string[] = JSON.parse(workRow.labels);
         return labels.includes(labelFilter);
       });
     }
@@ -288,7 +314,7 @@ const commands: Record<string, (args: string[]) => void> = {
       return;
     }
 
-    rows.map(rowToWorkItem).forEach((i) => console.log(formatWork(i)));
+    (rows as WorkRow[]).map(rowToWorkItem).forEach((i) => console.log(formatWork(i)));
   },
 
   show: (args) => {
@@ -302,7 +328,7 @@ const commands: Record<string, (args: string[]) => void> = {
     const db = getDb();
     const row = db
       .query("SELECT * FROM work WHERE id = ?")
-      .get(padId(id)) as any;
+      .get(padId(id)) as WorkRow | null;
     db.close();
 
     if (!row) {
@@ -351,7 +377,7 @@ const commands: Record<string, (args: string[]) => void> = {
     const db = getDb();
     const row = db
       .query("SELECT * FROM work WHERE id = ?")
-      .get(padId(id)) as any;
+      .get(padId(id)) as WorkRow | null;
     if (!row) {
       db.close();
       console.error(`Work item ${id} not found`);
@@ -378,7 +404,7 @@ const commands: Record<string, (args: string[]) => void> = {
     const db = getDb();
     const row = db
       .query("SELECT * FROM work WHERE id = ?")
-      .get(padId(id)) as any;
+      .get(padId(id)) as WorkRow | null;
     if (!row) {
       db.close();
       console.error(`Work item ${id} not found`);
@@ -405,7 +431,7 @@ const commands: Record<string, (args: string[]) => void> = {
     const db = getDb();
     const row = db
       .query("SELECT * FROM work WHERE id = ?")
-      .get(padId(id)) as any;
+      .get(padId(id)) as WorkRow | null;
     if (!row) {
       db.close();
       console.error(`Work item ${id} not found`);
@@ -435,7 +461,7 @@ const commands: Record<string, (args: string[]) => void> = {
     const db = getDb();
     const row = db
       .query("SELECT * FROM work WHERE id = ?")
-      .get(padId(id)) as any;
+      .get(padId(id)) as WorkRow | null;
     if (!row) {
       db.close();
       console.error(`Work item ${id} not found`);
@@ -476,7 +502,7 @@ const commands: Record<string, (args: string[]) => void> = {
     const db = getDb();
     const row = db
       .query("SELECT * FROM work WHERE id = ?")
-      .get(padId(id)) as any;
+      .get(padId(id)) as WorkRow | null;
     if (!row) {
       db.close();
       console.error(`Work item ${id} not found`);
@@ -485,7 +511,7 @@ const commands: Record<string, (args: string[]) => void> = {
 
     const blockerRow = db
       .query("SELECT * FROM work WHERE id = ?")
-      .get(padId(blockerId)) as any;
+      .get(padId(blockerId)) as WorkRow | null;
     if (!blockerRow) {
       db.close();
       console.error(`Blocker work item ${blockerId} not found`);
@@ -527,7 +553,7 @@ const commands: Record<string, (args: string[]) => void> = {
     const db = getDb();
     const row = db
       .query("SELECT * FROM work WHERE id = ?")
-      .get(padId(id)) as any;
+      .get(padId(id)) as WorkRow | null;
     if (!row) {
       db.close();
       console.error(`Work item ${id} not found`);
@@ -565,12 +591,12 @@ const commands: Record<string, (args: string[]) => void> = {
       .query(
         "SELECT * FROM work WHERE status != 'closed' ORDER BY priority, CAST(id AS INTEGER)",
       )
-      .all();
+      .all() as WorkRow[];
 
     // Get all closed item IDs for checking blockers
     const closedIds = new Set(
       (
-        db.query("SELECT id FROM work WHERE status = 'closed'").all() as any[]
+        db.query("SELECT id FROM work WHERE status = 'closed'").all() as IdRow[]
       ).map((r) => r.id),
     );
 
@@ -600,12 +626,12 @@ const commands: Record<string, (args: string[]) => void> = {
       .query(
         "SELECT * FROM work WHERE status != 'closed' AND blocked_by IS NOT NULL ORDER BY priority, CAST(id AS INTEGER)",
       )
-      .all();
+      .all() as WorkRow[];
 
     // Get all closed item IDs
     const closedIds = new Set(
       (
-        db.query("SELECT id FROM work WHERE status = 'closed'").all() as any[]
+        db.query("SELECT id FROM work WHERE status = 'closed'").all() as IdRow[]
       ).map((r) => r.id),
     );
 
@@ -647,14 +673,21 @@ const commands: Record<string, (args: string[]) => void> = {
     const db = getDb();
     const row = db
       .query("SELECT * FROM work WHERE id = ?")
-      .get(padId(id)) as any;
+      .get(padId(id)) as WorkRow | null;
     if (!row) {
       db.close();
       console.error(`Work item ${id} not found`);
       process.exit(1);
     }
 
-    const validFields = ["title", "priority", "type", "description", "author", "assignee"];
+    const validFields = [
+      "title",
+      "priority",
+      "type",
+      "description",
+      "author",
+      "assignee",
+    ];
     if (!validFields.includes(field)) {
       db.close();
       console.error(`Unknown field: ${field}`);
@@ -741,7 +774,7 @@ const commands: Record<string, (args: string[]) => void> = {
     const db = getDb();
     const row = db
       .query("SELECT * FROM work WHERE id = ?")
-      .get(padId(id)) as any;
+      .get(padId(id)) as WorkRow | null;
     if (!row) {
       db.close();
       console.error(`Work item ${id} not found`);
@@ -769,7 +802,7 @@ const commands: Record<string, (args: string[]) => void> = {
     const db = getDb();
     const row = db
       .query("SELECT * FROM work WHERE id = ?")
-      .get(padId(id)) as any;
+      .get(padId(id)) as WorkRow | null;
     if (!row) {
       db.close();
       console.error(`Work item ${id} not found`);
@@ -798,7 +831,7 @@ const commands: Record<string, (args: string[]) => void> = {
       .query(
         "SELECT * FROM work WHERE assignee = ? AND status != 'closed' ORDER BY priority, CAST(id AS INTEGER)",
       )
-      .all(assignee);
+      .all(assignee) as WorkRow[];
     db.close();
 
     if (rows.length === 0) {
@@ -822,7 +855,7 @@ const commands: Record<string, (args: string[]) => void> = {
     const db = getDb();
     const row = db
       .query("SELECT * FROM work WHERE id = ?")
-      .get(padId(id)) as any;
+      .get(padId(id)) as WorkRow | null;
     if (!row) {
       db.close();
       console.error(`Work item ${id} not found`);
@@ -859,7 +892,7 @@ const commands: Record<string, (args: string[]) => void> = {
     const db = getDb();
     const row = db
       .query("SELECT * FROM work WHERE id = ?")
-      .get(padId(id)) as any;
+      .get(padId(id)) as WorkRow | null;
     if (!row) {
       db.close();
       console.error(`Work item ${id} not found`);
@@ -890,7 +923,7 @@ const commands: Record<string, (args: string[]) => void> = {
     const db = getDb();
     const rows = db
       .query("SELECT labels FROM work WHERE labels IS NOT NULL")
-      .all() as any[];
+      .all() as LabelsRow[];
     db.close();
 
     const allLabels = new Set<string>();
