@@ -314,7 +314,9 @@ const commands: Record<string, (args: string[]) => void> = {
       return;
     }
 
-    (rows as WorkRow[]).map(rowToWorkItem).forEach((i) => console.log(formatWork(i)));
+    (rows as WorkRow[])
+      .map(rowToWorkItem)
+      .forEach((i) => console.log(formatWork(i)));
   },
 
   show: (args) => {

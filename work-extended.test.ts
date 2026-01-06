@@ -104,9 +104,13 @@ describe("superagent-work CLI - Extended Tests", () => {
     });
 
     test("handles multiword title", async () => {
-      const result = await work("add This is a very long title with many words");
+      const result = await work(
+        "add This is a very long title with many words",
+      );
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain("This is a very long title with many words");
+      expect(result.stdout).toContain(
+        "This is a very long title with many words",
+      );
     });
   });
 
@@ -574,8 +578,9 @@ describe("superagent-work CLI - Extended Tests", () => {
     });
 
     test("no args shows help", async () => {
-      const result =
-        await $`bun ${join(import.meta.dir, "work.ts")}`.quiet().cwd(TEST_DIR);
+      const result = await $`bun ${join(import.meta.dir, "work.ts")}`
+        .quiet()
+        .cwd(TEST_DIR);
       expect(result.stdout.toString()).toContain("Commands:");
     });
   });
@@ -587,12 +592,16 @@ describe("superagent-work CLI - Extended Tests", () => {
       if (existsSync(freshDir)) rmSync(freshDir, { recursive: true });
       mkdirSync(freshDir, { recursive: true });
 
-      const initResult =
-        await $`bun ${join(import.meta.dir, "work.ts")} init`.quiet().cwd(freshDir);
-      await $`bun ${join(import.meta.dir, "work.ts")} add Test item`.quiet().cwd(freshDir);
+      const initResult = await $`bun ${join(import.meta.dir, "work.ts")} init`
+        .quiet()
+        .cwd(freshDir);
+      await $`bun ${join(import.meta.dir, "work.ts")} add Test item`
+        .quiet()
+        .cwd(freshDir);
 
-      const result =
-        await $`bun ${join(import.meta.dir, "work.ts")} labels`.quiet().cwd(freshDir);
+      const result = await $`bun ${join(import.meta.dir, "work.ts")} labels`
+        .quiet()
+        .cwd(freshDir);
       expect(result.stdout.toString()).toContain("No labels in use");
 
       rmSync(freshDir, { recursive: true });
@@ -610,8 +619,12 @@ describe("superagent-work CLI - Extended Tests", () => {
       const lines = result.stdout.split("\n").filter((l) => l.trim());
 
       // Find positions of items with different priorities
-      const p0Index = lines.findIndex((l) => l.includes("P0 critical") || l.includes("[P0]"));
-      const p4Index = lines.findIndex((l) => l.includes("P4 backlog") || l.includes("[P4]"));
+      const p0Index = lines.findIndex(
+        (l) => l.includes("P0 critical") || l.includes("[P0]"),
+      );
+      const p4Index = lines.findIndex(
+        (l) => l.includes("P4 backlog") || l.includes("[P4]"),
+      );
 
       // P0 should come before P4
       if (p0Index !== -1 && p4Index !== -1) {
@@ -654,19 +667,19 @@ describe("superagent-work - Database handling", () => {
   });
 
   test("fails gracefully without .work directory", async () => {
-    const result =
-      await $`bun ${join(import.meta.dir, "work.ts")} list`
-        .quiet()
-        .cwd(DB_TEST_DIR)
-        .nothrow();
+    const result = await $`bun ${join(import.meta.dir, "work.ts")} list`
+      .quiet()
+      .cwd(DB_TEST_DIR)
+      .nothrow();
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr.toString()).toContain("No .work directory found");
   });
 
   test("init creates all necessary files", async () => {
-    const result =
-      await $`bun ${join(import.meta.dir, "work.ts")} init`.quiet().cwd(DB_TEST_DIR);
+    const result = await $`bun ${join(import.meta.dir, "work.ts")} init`
+      .quiet()
+      .cwd(DB_TEST_DIR);
 
     expect(result.exitCode).toBe(0);
     expect(existsSync(join(DB_TEST_DIR, ".work"))).toBe(true);
